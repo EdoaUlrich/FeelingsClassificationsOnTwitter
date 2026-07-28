@@ -1,0 +1,42 @@
+{
+    "en": {
+        ":)": "smile",
+        ":-)": "smile",
+        ":(": "sad",
+        ":-(": "sad",
+        ":D": "grin",
+        ":-D": "grin",
+        ":P": "tongue",
+        ":-P": "tongue",
+        ";)": "wink",
+        ";-)": "wink",
+        ":o": "surprised",
+        ":-o": "surprised",
+        ":|": "neutral",
+        ":-|": "neutral",
+        ":/": "skeptical",
+        ":-/": "skeptical",
+        ":*": "kiss",
+        "<3": "heart"
+    },
+    "fr": {
+        ":)": "sourire",
+        ":-)": "sourire",
+        ":(": "triste",
+        ":-(": "triste",
+        ":D": "rire",
+        ":-D": "rire",
+        ":P": "langue",
+        ":-P": "langue",
+        ";)": "clin_d_oeil",
+        ";-)": "clin_d_oeil",
+        ":o": "surpris",
+        ":-o": "surpris",
+        ":|": "neutre",
+        ":-|": "neutre",
+        ":/": "sceptique",
+        ":-/": "sceptique",
+        ":*": "bisou",
+        "<3": "coeur"
+    }
+}

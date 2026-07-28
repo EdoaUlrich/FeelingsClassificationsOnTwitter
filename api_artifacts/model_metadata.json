@@ -1,0 +1,12 @@
+{
+  "model_name": "meilleur_modele",
+  "algorithm": "LogisticRegression (optimisé GridSearchCV)",
+  "training_date": "2026-07-28T00:55:04.558586",
+  "dataset": "Sentiment140",
+  "sampling_ratio": 0.02,
+  "vocabulary_size": 4488,
+  "labels": {
+    "0": "negative",
+    "1": "positive"
+  }
+}
