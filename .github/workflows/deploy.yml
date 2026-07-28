@@ -1,0 +1,101 @@
+name: CI/CD - Sentiment Analysis API
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+jobs:
+  # ------------------------------------------------------------------
+  # 1. TEST : tests unitaires + sécurité (Bandit) + qualité (Flake8)
+  # ------------------------------------------------------------------
+  test:
+    name: 🧪 Test
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout du code
+        uses: actions/checkout@v4
+
+      - name: Configuration de Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+          cache: "pip"
+
+      - name: Installation des dépendances
+        run: pip install -r requirements-dev.txt
+
+      - name: Tests unitaires (pytest)
+        run: pytest -v
+
+      - name: Scan de sécurité (Bandit)
+        run: bandit -r . -x ./tests,./test_api.py -ll
+
+      - name: Qualité du code (Flake8)
+        run: flake8 . --max-line-length=120 --exclude=.venv,venv
+
+  # ------------------------------------------------------------------
+  # 2. BUILD : validation des artifacts ML + health check local
+  # ------------------------------------------------------------------
+  build:
+    name: 🔧 Build
+    needs: test
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout du code
+        uses: actions/checkout@v4
+
+      - name: Configuration de Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+          cache: "pip"
+
+      - name: Installation des dépendances
+        run: pip install -r requirements.txt
+
+      - name: Validation des artifacts ML
+        run: |
+          test -f artifacts/sentiment_model.joblib || (echo "❌ Modèle manquant" && exit 1)
+          test -f artifacts/tfidf_vectorizer.joblib || (echo "❌ Vectorizer manquant" && exit 1)
+          echo "✅ Artifacts présents"
+
+      - name: Health check local
+        run: |
+          uvicorn main:app --host 0.0.0.0 --port 8000 &
+          SERVER_PID=$!
+          sleep 5
+          curl --fail http://localhost:8000/health
+          kill $SERVER_PID
+
+  # ------------------------------------------------------------------
+  # 3. DEPLOY : déploiement sur Render + health check production
+  #    (uniquement sur la branche main)
+  # ------------------------------------------------------------------
+  deploy:
+    name: 🚀 Deploy
+    needs: build
+    if: github.ref == 'refs/heads/main' && github.event_name == 'push'
+    runs-on: ubuntu-latest
+    steps:
+      - name: Déclenchement du déploiement Render
+        run: |
+          curl -X POST "${{ secrets.RENDER_DEPLOY_HOOK_URL }}"
+
+      - name: Attente de la mise en production
+        run: sleep 60
+
+      - name: Health check de production
+        run: |
+          curl --fail "${{ secrets.RENDER_API_URL }}/health" || \
+          (echo "❌ Health check production échoué" && exit 1)
+
+      - name: Notification de statut
+        if: always()
+        run: |
+          if [ "${{ job.status }}" = "success" ]; then
+            echo "✅ Déploiement réussi sur Render"
+          else
+            echo "❌ Échec du déploiement"
+          fi
