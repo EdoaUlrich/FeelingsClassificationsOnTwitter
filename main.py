@@ -27,6 +27,9 @@ VECTORIZER_PATH = ARTIFACTS_DIR / "tfidf_vectorizer.joblib"
 
 ml_models = {}
 
+# Correspondance entre les labels bruts du modèle (0/1) et le sentiment lisible
+LABEL_TO_SENTIMENT = {0: "negative", 1: "positive", "0": "negative", "1": "positive"}
+
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
@@ -117,7 +120,7 @@ def predict(payload: PredictRequest):
 
     return PredictResponse(
         text=payload.text,
-        sentiment=str(classes[best_idx]),
+        sentiment=LABEL_TO_SENTIMENT[classes[best_idx]],
         confidence=round(float(proba[best_idx]), 4),
     )
 
@@ -151,7 +154,7 @@ def explain(payload: ExplainRequest):
 
     return ExplainResponse(
         text=payload.text,
-        sentiment=str(classes[best_idx]),
+        sentiment=LABEL_TO_SENTIMENT[classes[best_idx]],
         confidence=round(float(proba[best_idx]), 4),
         top_words=top_words,
     )
