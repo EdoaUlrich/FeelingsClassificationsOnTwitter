@@ -289,20 +289,23 @@ def benchmark_approaches(tfidf, model_name=MODEL_NAME):
     test_texts = ["I love this product!", "This is terrible.", "Average, nothing special."]
 
     mlflow_model = load_model_from_mlflow(model_name)
-    start = time.time()
+    start = time.perf_counter()
     for t in test_texts:
         mlflow_model.predict(tfidf.transform([t]))
-    mlflow_time = (time.time() - start) / len(test_texts)
+    mlflow_time = (time.perf_counter() - start) / len(test_texts)
 
     model, vectorizer = load_model_from_joblib()
-    start = time.time()
+    start = time.perf_counter()
     for t in test_texts:
         model.predict(vectorizer.transform([t]))
-    joblib_time = (time.time() - start) / len(test_texts)
+    joblib_time = (time.perf_counter() - start) / len(test_texts)
 
     print(f"MLflow : {mlflow_time*1000:.1f} ms/prédiction")
     print(f"Joblib : {joblib_time*1000:.1f} ms/prédiction")
-    print(f"🚀 Joblib est {mlflow_time/joblib_time:.1f}x plus rapide")
+    if joblib_time > 0:
+        print(f"🚀 Joblib est {mlflow_time/joblib_time:.1f}x plus rapide")
+    else:
+        print("🚀 Joblib est trop rapide pour être mesuré (temps ≈ 0)")
 
 
 # ============================================================
