@@ -156,6 +156,3 @@ graph TD
 - **CI/CD** : GitHub Actions
 - **Hébergement** : Render (API) + Streamlit Cloud (interface)
 
-## 📄 Licence
-
-Projet réalisé à des fins pédagogiques dans le cadre d'un exercice de Data Science.
