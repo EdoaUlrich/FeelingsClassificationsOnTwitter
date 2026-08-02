@@ -21,7 +21,7 @@ from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel, Field
 
-ARTIFACTS_DIR = Path("artifacts")
+ARTIFACTS_DIR = Path("api_artifacts")
 MODEL_PATH = ARTIFACTS_DIR / "sentiment_model.joblib"
 VECTORIZER_PATH = ARTIFACTS_DIR / "tfidf_vectorizer.joblib"
 
