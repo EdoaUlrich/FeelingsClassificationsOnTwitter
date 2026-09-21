@@ -64,7 +64,7 @@ from sklearn.linear_model import LogisticRegression, LinearRegression
 from sklearn.ensemble import RandomForestClassifier, GradientBoostingClassifier
 from sklearn.tree import DecisionTreeClassifier
 from sklearn.metrics import (
-    accuracy_score, roc_auc_score, f1_score, confusion_matrix, roc_curve, get_scorer,
+    accuracy_score, roc_auc_score, f1_score, confusion_matrix, roc_curve, get_scorer, make_scorer,
 )
 from sklearn.pipeline import make_pipeline
 from lime.lime_text import LimeTextExplainer
@@ -236,38 +236,43 @@ def evaluate_and_log_model(model, model_name, X_train, X_test, y_train, y_test, 
 # ============================================================
 # 9. GRIDSEARCH + TRACKING MLFLOW (runs imbriqués)
 # ============================================================
-def log_gridsearch_to_mlflow(estimator, param_grid, X_train, y_train, X_test, y_test, cv=5, scoring="accuracy"):
+def log_gridsearch_to_mlflow(estimator, param_grid, X_train, y_train, X_test, y_test,
+                              cv=5, scoring="accuracy", scoring_name=None, model_name="meilleur_modele"):
     """Exécute GridSearchCV en loggant chaque configuration testée (run parent + runs enfants)."""
-    with mlflow.start_run(run_name="Optimisation") as parent_run:
-        grid = GridSearchCV(estimator=estimator, param_grid=param_grid, cv=cv, scoring=scoring)
+    # scoring_name sert de libellé lisible pour les métriques MLflow quand `scoring` est un
+    # scorer personnalisé (ex. make_scorer) plutôt qu'une simple chaîne comme "accuracy".
+    scoring_name = scoring_name or (scoring if isinstance(scoring, str) else "score")
+
+    with mlflow.start_run(run_name=f"Optimisation_{model_name}") as parent_run:
+        grid = GridSearchCV(estimator=estimator, param_grid=param_grid, cv=cv, scoring=scoring, n_jobs=-1)
         grid.fit(X_train, y_train)
 
         cv_results = grid.cv_results_
         nombre_configs = len(cv_results["params"])
 
         for i in range(nombre_configs):
-            with mlflow.start_run(run_name=f"Optimisation_fils{i+1}", nested=True):
+            with mlflow.start_run(run_name=f"Optimisation_{model_name}_fils{i+1}", nested=True):
                 mlflow.log_params(cv_results["params"][i])
-                mlflow.log_metric(f"cv_mean_{scoring}", cv_results["mean_test_score"][i])
-                mlflow.log_metric(f"cv_std_{scoring}", cv_results["std_test_score"][i])
+                mlflow.log_metric(f"cv_mean_{scoring_name}", cv_results["mean_test_score"][i])
+                mlflow.log_metric(f"cv_std_{scoring_name}", cv_results["std_test_score"][i])
                 mlflow.log_metric("fit_time_seconds", cv_results["mean_fit_time"][i])
 
         best_params = grid.best_params_
         best_model = grid.best_estimator_
 
         mlflow.log_params({f"best_{k}": v for k, v in best_params.items()})
-        model_info = mlflow.sklearn.log_model(best_model, name="meilleur_modele")
+        model_info = mlflow.sklearn.log_model(best_model, name=model_name)
 
-        scorer = get_scorer(scoring)
+        scorer = get_scorer(scoring) if isinstance(scoring, str) else scoring
         test_score = scorer(best_model, X_test, y_test)
-        mlflow.log_metric(f"test_{scoring}", test_score)
+        mlflow.log_metric(f"test_{scoring_name}", test_score)
 
-        print("\n✅ Optimisation terminée !")
+        print(f"\n✅ Optimisation terminée pour {model_name} !")
         print(f"Meilleurs paramètres : {best_params}")
-        print(f"Score de validation croisée ({scoring}) : {grid.best_score_:.4f}")
-        print(f"Score sur le jeu de test ({scoring}) : {test_score:.4f}")
+        print(f"Score de validation croisée ({scoring_name}) : {grid.best_score_:.4f}")
+        print(f"Score sur le jeu de test ({scoring_name}) : {test_score:.4f}")
 
-        return best_model, parent_run.info.run_id, model_info.model_uri
+        return best_model, parent_run.info.run_id, model_info.model_uri, test_score
 
 
 # ============================================================
@@ -465,12 +470,72 @@ def main():
     print("\n🏆 Comparaison des modèles :")
     print(results_df[["Accuracy", "AUC_ROC_Score", "f1_score", "Temps_entrainement_secondes"]])
 
-    # ---- 9. GridSearchCV ----
-    param_grid = {"C": [0.1, 1.0, 10.0, 15.0, 20.0], "max_iter": [1000, 2000, 3000, 4000, 5000]}
-    model_best, id_best_model, best_model_uri = log_gridsearch_to_mlflow(
-        models_to_compare["Regression_Logistic"], param_grid,
-        X_train_tfidf, y_train1, X_test_tfidf, y_test1, cv=5, scoring="accuracy",
-    )
+    # ---- 9. GridSearchCV pour chaque algorithme, puis sélection du plus performant ----
+    # NB : Regression_Lineaire est pleinement éligible ici (via rounded_accuracy, qui
+    # binarise sa sortie continue). Comme elle n'a ni predict_proba/classes_/coef_ 2D,
+    # main.py (API) et la section interprétabilité ci-dessous ont été adaptés pour la
+    # supporter si elle est retenue comme meilleur modèle.
+    param_grids = {
+        "Regression_Logistic": {
+            "C": [0.1, 1.0, 10.0, 15.0, 20.0],
+            "max_iter": [1000, 2000, 3000, 4000, 5000],
+        },
+        "Regression_Lineaire": {
+            "fit_intercept": [True, False],
+            "positive": [True, False],
+        },
+        "RandomForestClassifier": {
+            "n_estimators": [50, 100, 200],
+            "max_depth": [None, 10, 20],
+            "criterion": ["gini", "entropy"],
+        },
+        "DecisionTree": {
+            "max_depth": [None, 5, 10, 20],
+            "criterion": ["gini", "entropy"],
+        },
+        "GradientBoosting": {
+            "n_estimators": [50, 100, 200],
+            "learning_rate": [0.01, 0.1, 0.2],
+            "max_depth": [2, 3, 5],
+        },
+        "XGBoost": {
+            "n_estimators": [50, 100, 200],
+            "learning_rate": [0.01, 0.1, 0.2],
+            "max_depth": [3, 5, 7],
+        },
+    }
+
+    def rounded_accuracy(y_true, y_pred):
+        # Uniformise le scoring entre classifieurs (labels 0/1) et modèles à sortie
+        # continue, en reprenant la binarisation déjà utilisée dans evaluate_and_log_model.
+        pred_labels = np.round(np.clip(y_pred, 0, 1)).astype(int)
+        return accuracy_score(y_true, pred_labels)
+
+    custom_scorer = make_scorer(rounded_accuracy)
+
+    optimized_results = {}
+    for name, estimator in models_to_compare.items():
+        grid = param_grids.get(name)
+        if grid is None:
+            print(f"⚠️ Pas de grille d'hyperparamètres définie pour {name}, optimisation ignorée.")
+            continue
+        best_model, run_id, model_uri, test_score = log_gridsearch_to_mlflow(
+            estimator, grid, X_train_tfidf, y_train1, X_test_tfidf, y_test1,
+            cv=5, scoring=custom_scorer, scoring_name="accuracy", model_name=name,
+        )
+        optimized_results[name] = {
+            "model": best_model, "run_id": run_id, "model_uri": model_uri, "test_accuracy": test_score,
+        }
+
+    best_algo_name = max(optimized_results, key=lambda n: optimized_results[n]["test_accuracy"])
+    model_best = optimized_results[best_algo_name]["model"]
+    id_best_model = optimized_results[best_algo_name]["run_id"]
+    best_model_uri = optimized_results[best_algo_name]["model_uri"]
+
+    print("\n🏆 Comparaison des modèles optimisés :")
+    for name, res in sorted(optimized_results.items(), key=lambda kv: kv[1]["test_accuracy"], reverse=True):
+        print(f"  {name}: test_accuracy = {res['test_accuracy']:.4f}")
+    print(f"\n✅ Algorithme retenu : {best_algo_name} (test_accuracy = {optimized_results[best_algo_name]['test_accuracy']:.4f})")
 
     # ---- 10. Model Registry ----
     client = MlflowClient()
@@ -493,7 +558,9 @@ def main():
     with mlflow.start_run(run_name="model_interpretability"):
         if hasattr(model_best, "coef_"):
             feature_names = tfidf.get_feature_names_out()
-            coefs = model_best.coef_[0]
+            # LinearRegression expose coef_ en 1D (un coefficient par feature), tandis que
+            # LogisticRegression l'expose en 2D ((1, n_features) en classification binaire).
+            coefs = model_best.coef_ if model_best.coef_.ndim == 1 else model_best.coef_[0]
             top_positive_indices = np.argsort(coefs)[-10:]
             top_negative_indices = np.argsort(coefs)[:10]
             top_indices = np.concatenate([top_negative_indices, top_positive_indices])
@@ -568,7 +635,7 @@ def main():
 
         metadata = {
             "model_name": MODEL_NAME,
-            "algorithm": "LogisticRegression (optimisé GridSearchCV)",
+            "algorithm": f"{best_algo_name} (optimisé GridSearchCV)",
             "training_date": datetime.now().isoformat(),
             "dataset": "Sentiment140",
             "sampling_ratio": SAMPLING_RATIO,

@@ -100,6 +100,42 @@ def _get_model_and_vectorizer():
     return model, vectorizer
 
 
+def _predict_proba(model, vec):
+    """Retourne (probabilités, classes) quel que soit l'algorithme retenu à l'entraînement.
+
+    LinearRegression (candidat éligible depuis l'optimisation multi-algorithmes) n'a ni
+    predict_proba ni classes_ : sa sortie continue est interprétée comme un score de
+    positivité, clippé entre 0 et 1.
+    """
+    if hasattr(model, "predict_proba"):
+        return model.predict_proba(vec)[0], model.classes_
+    if hasattr(model, "decision_function"):
+        score = float(model.decision_function(vec)[0])
+        p_positive = 1 / (1 + np.exp(-score))
+        return np.array([1 - p_positive, p_positive]), np.array([0, 1])
+    p_positive = float(np.clip(model.predict(vec)[0], 0, 1))
+    return np.array([1 - p_positive, p_positive]), np.array([0, 1])
+
+
+def _feature_weights(model, predicted_class_idx, n_classes):
+    """Retourne un poids par feature pour l'explication, quel que soit l'algorithme.
+
+    coef_ pour les modèles linéaires (Logistic/LinearRegression), feature_importances_
+    pour les modèles à base d'arbres (RandomForest/DecisionTree/GradientBoosting/XGBoost).
+    None si le modèle n'expose aucun des deux (aucune explication possible).
+    """
+    if hasattr(model, "coef_"):
+        coef = model.coef_
+        if coef.ndim == 1:
+            return coef
+        return coef[0] if n_classes == 2 else coef[predicted_class_idx]
+    if hasattr(model, "feature_importances_"):
+        # Importances globales et non signées : une approximation de la contribution
+        # réelle du mot, contrairement à coef_ * tfidf pour les modèles linéaires.
+        return model.feature_importances_
+    return None
+
+
 @app.get("/health")
 def health():
     model_loaded = ml_models.get("model") is not None
@@ -114,8 +150,7 @@ def predict(payload: PredictRequest):
     model, vectorizer = _get_model_and_vectorizer()
 
     vec = vectorizer.transform([payload.text])
-    proba = model.predict_proba(vec)[0]
-    classes = model.classes_
+    proba, classes = _predict_proba(model, vec)
     best_idx = int(np.argmax(proba))
 
     return PredictResponse(
@@ -130,27 +165,28 @@ def explain(payload: ExplainRequest):
     model, vectorizer = _get_model_and_vectorizer()
 
     vec = vectorizer.transform([payload.text])
-    proba = model.predict_proba(vec)[0]
-    classes = model.classes_
+    proba, classes = _predict_proba(model, vec)
     best_idx = int(np.argmax(proba))
-    predicted_class_idx = list(model.classes_).index(classes[best_idx])
 
-    # Contribution = poids du modèle (coef) * valeur tf-idf du mot dans le texte
+    # Contribution = poids du modèle (coef_ ou feature_importances_) * valeur tf-idf du mot
     feature_names = np.array(vectorizer.get_feature_names_out())
-    coefs = model.coef_[0] if len(model.classes_) == 2 else model.coef_[predicted_class_idx]
+    weights = _feature_weights(model, best_idx, len(classes))
 
     row = vec.toarray()[0]
     nonzero_idx = np.nonzero(row)[0]
 
-    contributions = coefs[nonzero_idx] * row[nonzero_idx]
-    words = feature_names[nonzero_idx]
-
-    order = np.argsort(-np.abs(contributions))[: payload.top_n]
-
-    top_words = [
-        WordContribution(word=str(words[i]), weight=round(float(contributions[i]), 4))
-        for i in order
-    ]
+    if weights is None:
+        # Aucun modèle exposant coef_/feature_importances_ (ne devrait pas arriver avec
+        # les algorithmes actuellement entraînés) : pas d'explication possible.
+        top_words = []
+    else:
+        contributions = weights[nonzero_idx] * row[nonzero_idx]
+        words = feature_names[nonzero_idx]
+        order = np.argsort(-np.abs(contributions))[: payload.top_n]
+        top_words = [
+            WordContribution(word=str(words[i]), weight=round(float(contributions[i]), 4))
+            for i in order
+        ]
 
     return ExplainResponse(
         text=payload.text,
