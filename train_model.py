@@ -41,38 +41,41 @@ from datetime import datetime
 
 import matplotlib
 matplotlib.use("Agg")  # backend non-interactif : indispensable en script (pas de notebook display)
-import matplotlib.pyplot as plt
-import seaborn as sns
-import numpy as np
-import pandas as pd
-import joblib
+import matplotlib.pyplot as plt  # noqa: E402
+import seaborn as sns  # noqa: E402
+import numpy as np  # noqa: E402
+import pandas as pd  # noqa: E402
+import joblib  # noqa: E402
 
-import spacy
-import emoji
-from langdetect import detect, LangDetectException
-from nltk.stem.snowball import SnowballStemmer
-from dotenv import load_dotenv
+import spacy  # noqa: E402
+import emoji  # noqa: E402
+from langdetect import detect, LangDetectException  # noqa: E402
+from nltk.stem.snowball import SnowballStemmer  # noqa: E402
+from dotenv import load_dotenv  # noqa: E402
 
-import mlflow
-import mlflow.sklearn
-import mlflow.pyfunc
-from mlflow.tracking import MlflowClient
+import mlflow  # noqa: E402
+import mlflow.sklearn  # noqa: E402
+import mlflow.pyfunc  # noqa: E402
+from mlflow.tracking import MlflowClient  # noqa: E402
 
-from sklearn.model_selection import train_test_split, GridSearchCV
-from sklearn.feature_extraction.text import TfidfVectorizer
-from sklearn.linear_model import LogisticRegression, LinearRegression
-from sklearn.ensemble import RandomForestClassifier, GradientBoostingClassifier
-from sklearn.tree import DecisionTreeClassifier
-from sklearn.metrics import (
+from sklearn.model_selection import train_test_split, GridSearchCV  # noqa: E402
+from sklearn.feature_extraction.text import TfidfVectorizer  # noqa: E402
+from sklearn.linear_model import LogisticRegression, LinearRegression  # noqa: E402
+from sklearn.ensemble import RandomForestClassifier, GradientBoostingClassifier  # noqa: E402
+from sklearn.tree import DecisionTreeClassifier  # noqa: E402
+from sklearn.metrics import (  # noqa: E402
     accuracy_score, roc_auc_score, f1_score, confusion_matrix, roc_curve, get_scorer, make_scorer,
 )
-from sklearn.pipeline import make_pipeline
-from lime.lime_text import LimeTextExplainer
+from sklearn.pipeline import make_pipeline  # noqa: E402
+from lime.lime_text import LimeTextExplainer  # noqa: E402
 
 # ============================================================
 # CONFIGURATION GLOBALE
 # ============================================================
-DATASET_URL = "https://github.com/archiducarmel/ESIEA_MLOPS/releases/download/datas/training.1600000.processed.noemoticon.csv"
+DATASET_URL = (
+    "https://github.com/archiducarmel/ESIEA_MLOPS/releases/download/datas/"
+    "training.1600000.processed.noemoticon.csv"
+)
 SAMPLING_RATIO = 0.02
 RANDOM_STATE = 42
 API_ARTIFACTS_DIR = "api_artifacts"
@@ -237,7 +240,7 @@ def evaluate_and_log_model(model, model_name, X_train, X_test, y_train, y_test, 
 # 9. GRIDSEARCH + TRACKING MLFLOW (runs imbriqués)
 # ============================================================
 def log_gridsearch_to_mlflow(estimator, param_grid, X_train, y_train, X_test, y_test,
-                              cv=5, scoring="accuracy", scoring_name=None, model_name="meilleur_modele"):
+                             cv=5, scoring="accuracy", scoring_name=None, model_name="meilleur_modele"):
     """Exécute GridSearchCV en loggant chaque configuration testée (run parent + runs enfants)."""
     # scoring_name sert de libellé lisible pour les métriques MLflow quand `scoring` est un
     # scorer personnalisé (ex. make_scorer) plutôt qu'une simple chaîne comme "accuracy".
@@ -530,7 +533,8 @@ def main():
     print("\n🏆 Comparaison des modèles optimisés :")
     for name, res in sorted(optimized_results.items(), key=lambda kv: kv[1]["test_accuracy"], reverse=True):
         print(f"  {name}: test_accuracy = {res['test_accuracy']:.4f}")
-    print(f"\n✅ Algorithme retenu : {best_algo_name} (test_accuracy = {optimized_results[best_algo_name]['test_accuracy']:.4f})")
+    best_test_accuracy = optimized_results[best_algo_name]["test_accuracy"]
+    print(f"\n✅ Algorithme retenu : {best_algo_name} (test_accuracy = {best_test_accuracy:.4f})")
 
     # ---- 10. Model Registry ----
     client = MlflowClient()
@@ -629,6 +633,7 @@ def main():
         metadata = {
             "model_name": MODEL_NAME,
             "algorithm": f"{best_algo_name} (optimisé GridSearchCV)",
+            "mlflow_run_id": id_best_model,
             "training_date": datetime.now().isoformat(),
             "dataset": "Sentiment140",
             "sampling_ratio": SAMPLING_RATIO,
