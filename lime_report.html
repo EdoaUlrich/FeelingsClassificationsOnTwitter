@@ -37089,25 +37089,25 @@
 /***/ })
 /******/ ]);
 //# sourceMappingURL=bundle.js.map </script></head><body>
-        <div class="lime top_div" id="top_divLD5Z0I85UCBGZ72"></div>
+        <div class="lime top_div" id="top_div3KHCYE4BV6L4GN3"></div>
         
         <script>
-        var top_div = d3.select('#top_divLD5Z0I85UCBGZ72').classed('lime top_div', true);
+        var top_div = d3.select('#top_div3KHCYE4BV6L4GN3').classed('lime top_div', true);
         
             var pp_div = top_div.append('div')
                                 .classed('lime predict_proba', true);
             var pp_svg = pp_div.append('svg').style('width', '100%');
-            var pp = new lime.PredictProba(pp_svg, ["Classe_Negative", "Classe_Positive"], [0.45114479345437264, 0.5488552065456274]);
+            var pp = new lime.PredictProba(pp_svg, ["Classe_Negative", "Classe_Positive"], [0.4506582327083679, 0.5493417672916321]);
             
         
         var exp_div;
             var exp = new lime.Explanation(["Classe_Negative", "Classe_Positive"]);
         
                 exp_div = top_div.append('div').classed('lime explanation', true);
-                exp.show([["la", 0.035312964010124286], ["C", 6.380588584939329e-06], ["un", 4.954892467027903e-06], ["est", 3.970616040114413e-06], ["absolument", 3.408632511303058e-06], ["produit", 2.9760510956950027e-06]], 1, exp_div);
+                exp.show([["la", 0.03577267251646843], ["absolument", 7.0060695911455584e-06], ["C", 5.782983514124653e-06], ["produit", 3.6537516645886613e-06], ["un", 3.364701695058275e-06], ["est", 3.087779396779759e-06]], 1, exp_div);
                 
         var raw_div = top_div.append('div');
-            exp.show_raw_text([["la", 45, 0.035312964010124286], ["C", 0, 6.380588584939329e-06], ["un", 6, 4.954892467027903e-06], ["un", 64, 4.954892467027903e-06], ["est", 2, 3.970616040114413e-06], ["absolument", 17, 3.408632511303058e-06], ["produit", 9, 2.9760510956950027e-06]], 1, "C'est un produit absolument fantastique mais la livraison a \u00e9t\u00e9 un peu lente.", raw_div, true);
+            exp.show_raw_text([["la", 45, 0.03577267251646843], ["absolument", 17, 7.0060695911455584e-06], ["C", 0, 5.782983514124653e-06], ["produit", 9, 3.6537516645886613e-06], ["un", 6, 3.364701695058275e-06], ["un", 64, 3.364701695058275e-06], ["est", 2, 3.087779396779759e-06]], 1, "C'est un produit absolument fantastique mais la livraison a \u00e9t\u00e9 un peu lente.", raw_div, true);
             
         </script>
         </body></html>

@@ -471,36 +471,31 @@ def main():
     print(results_df[["Accuracy", "AUC_ROC_Score", "f1_score", "Temps_entrainement_secondes"]])
 
     # ---- 9. GridSearchCV pour chaque algorithme, puis sélection du plus performant ----
-    # NB : Regression_Lineaire est pleinement éligible ici (via rounded_accuracy, qui
-    # binarise sa sortie continue). Comme elle n'a ni predict_proba/classes_/coef_ 2D,
-    # main.py (API) et la section interprétabilité ci-dessous ont été adaptés pour la
-    # supporter si elle est retenue comme meilleur modèle.
+    # NB : Regression_Lineaire n'a pas d'hyperparamètres pertinents pour une tâche de
+    # classification (pas de C/max_iter/profondeur) : elle reste dans le comparatif de
+    # l'étape 8 mais n'est pas optimisée ni éligible comme "meilleur modèle" déployable.
     param_grids = {
         "Regression_Logistic": {
             "C": [0.1, 1.0, 10.0, 15.0, 20.0],
-            "max_iter": [1000, 2000, 3000, 4000, 5000],
-        },
-        "Regression_Lineaire": {
-            "fit_intercept": [True, False],
-            "positive": [True, False],
+            "max_iter": [1000, 1200, 1400, 2000, 3000, 4000, 5000],
         },
         "RandomForestClassifier": {
-            "n_estimators": [50, 100, 200],
+            "n_estimators": [10, 20, 40, 50, 70, 100, 120, 150, 200, 250, 300],
             "max_depth": [None, 10, 20],
             "criterion": ["gini", "entropy"],
         },
         "DecisionTree": {
-            "max_depth": [None, 5, 10, 20],
+            "max_depth": [None, 5, 7, 10, 13, 17, 20, 25, 30],
             "criterion": ["gini", "entropy"],
         },
         "GradientBoosting": {
-            "n_estimators": [50, 100, 200],
+            "n_estimators": [10, 20, 40, 50, 70, 100, 120, 150, 200, 250, 300],
             "learning_rate": [0.01, 0.1, 0.2],
-            "max_depth": [2, 3, 5],
+            "max_depth": [2, 3, 5, 7, 10, 12, 15, 20],
         },
         "XGBoost": {
-            "n_estimators": [50, 100, 200],
-            "learning_rate": [0.01, 0.1, 0.2],
+            "n_estimators": [10, 20, 30, 40, 50, 70, 90, 100, 130, 150, 180, 200],
+            "learning_rate": [0.01, 0.001, 0.1, 0.2],
             "max_depth": [3, 5, 7],
         },
     }
@@ -558,9 +553,7 @@ def main():
     with mlflow.start_run(run_name="model_interpretability"):
         if hasattr(model_best, "coef_"):
             feature_names = tfidf.get_feature_names_out()
-            # LinearRegression expose coef_ en 1D (un coefficient par feature), tandis que
-            # LogisticRegression l'expose en 2D ((1, n_features) en classification binaire).
-            coefs = model_best.coef_ if model_best.coef_.ndim == 1 else model_best.coef_[0]
+            coefs = model_best.coef_[0]
             top_positive_indices = np.argsort(coefs)[-10:]
             top_negative_indices = np.argsort(coefs)[:10]
             top_indices = np.concatenate([top_negative_indices, top_positive_indices])
